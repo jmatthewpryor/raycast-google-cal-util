@@ -1,0 +1,51 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "google-calendar-utils",
+  "title": "Google Calendar Utils",
+  "description": "Read & Adapt Google Calendar Entries",
+  "icon": "google-logo.png",
+  "owner": "tenacious.ventures",
+  "access": "public",
+  "author": "jmatthewpryor",
+  "contributors": [
+    "jmatthewpryor"
+  ],
+  "categories": [
+    "Productivity"
+  ],
+  "license": "MIT",
+  "commands": [
+    {
+      "name": "show-google-calendars",
+      "title": "Show Google Calendars",
+      "description": "List of your Google calendars.",
+      "icon": "google-calendar.png",
+      "mode": "view"
+    }
+  ],
+  "dependencies": {
+    "@googleapis/calendar": "^2.0.0",
+    "@raycast/api": "^1.39.3",
+    "@raycast/utils": "^1.4.8",
+    "date-fns": "^2.29.3",
+    "jwt-decode": "^3.1.2",
+    "mustache": "^4.2.0",
+    "node-fetch": "^3.2.6"
+  },
+  "devDependencies": {
+    "@types/jwt-decode": "^3.1.0",
+    "@types/mustache": "^4.2.2",
+    "@typescript-eslint/eslint-plugin": "^5.30.5",
+    "@typescript-eslint/parser": "^5.30.5",
+    "eslint": "^8.19.0",
+    "eslint-config-prettier": "^8.5.0",
+    "prettier": "^2.7.1",
+    "typescript": "^4.7.4"
+  },
+  "scripts": {
+    "build": "ray build -e dist",
+    "dev": "ray develop",
+    "fix-lint": "ray lint --fix",
+    "lint": "ray lint"
+  }
+}
