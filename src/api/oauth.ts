@@ -2,10 +2,7 @@ import { OAuth } from "@raycast/api";
 import jwt_decode from "jwt-decode";
 import fetch from "node-fetch";
 
-//const clientId = "859594387706-uunbhp90efuesm18epbs0pakuft1m1kt.apps.googleusercontent.com"; //original
-//const clientId = "730109225324-4gvodl1re7oum517fbike4uig6e313jo.apps.googleusercontent.com";//web
-// const clientId = "730109225324-2c53feg5jjp8gna8fk8o09u49am4jo3a.apps.googleusercontent.com";//iOS
-const clientId = "730109225324-md9i0bm0qtlvdid4j3m135b91g5jjfci.apps.googleusercontent.com"; //iOS 2
+const clientId = "730109225324-md9i0bm0qtlvdid4j3m135b91g5jjfci.apps.googleusercontent.com"; //iOS 2 - https://console.cloud.google.com/apis/credentials/oauthclient/730109225324-md9i0bm0qtlvdid4j3m135b91g5jjfci.apps.googleusercontent.com?project=acious
 
 export const client = new OAuth.PKCEClient({
   redirectMethod: OAuth.RedirectMethod.AppURI,

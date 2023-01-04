@@ -1,3 +1,5 @@
+import { parseISO, parse, format } from "date-fns";
+
 const months = [
   "January",
   "February",
@@ -12,6 +14,26 @@ const months = [
   "November",
   "December",
 ];
+
+export function isValidDate(date: Date) {
+  return date instanceof Date && !isNaN(date.getTime());
+}
+
+export function getDateAsTanaString(date: Date) {
+  return format(date, "MMMM do, yyyy");
+}
+
+export function getTimeAs24Hr(date: Date) {
+  return format(date, "HH:mm");
+}
+
+export function getDateFromTanaString(date: string | undefined): Date {
+  return date?parse(date, "MMMM do, yyyy", new Date()): new Date();
+}
+
+export function getDateFromISOString(date: string | undefined): Date {
+  return date?parseISO(date): new Date();
+}
 
 export const nth = function (d: number) {
   if (d > 3 && d < 21) return "th";

@@ -9,6 +9,7 @@ import {
   Toast,
   useNavigation,
   Clipboard,
+  closeMainWindow,
 } from "@raycast/api";
 import { useFetch } from "@raycast/utils";
 import { endOfDay, startOfDay } from "date-fns";
@@ -17,7 +18,6 @@ import { useEffect, useState } from "react";
 import Mustache from "mustache";
 import {
   CalendarListEntry,
-  CalendarEventEntry,
   getCalendarListURL,
   getCalendarEventListURL,
   CalendarEventListResponse,
@@ -25,7 +25,7 @@ import {
 import { withGoogleAuth, getOAuthToken } from "./components/withGoogleAuth";
 import { ContactsSearchResponse, getContactSearchByEmailURL } from "./api/readContact";
 import { revokeTokens } from "./api/oauth";
-import { formatDate } from "./helpers/date";
+import { getDateAsTanaString, getDateFromISOString, getTimeAs24Hr } from "./helpers/date";
 
 const CALS_KEY = "TanaGCalHelper.selectedCals";
 
@@ -58,18 +58,18 @@ function UsersGooleCalendars() {
     setCals(cals);
   }
 
-  const [allEvents, setAllEvents] = useState<CalendarEventEntry[]>([]);
+  const [allEvents, setAllEvents] = useState<CalendarListEntry[]>([]);
   useEffect(() => {
-    if (cals && cals.length)
+    if (cals && cals.length) {
       Promise.all(
-        cals.map((cal) =>
-          fetch(getCalendarEventListURL(cal, startOfDay(new Date()), endOfDay(new Date())), {
+        cals.map((cal) => {
+          return fetch(getCalendarEventListURL(cal, startOfDay(new Date()), endOfDay(new Date())), {
             headers: {
               "Content-Type": "application/json",
               Authorization: `Bearer ${getOAuthToken()}`,
             },
-          })
-        )
+          });
+        })
       ).then((values) => {
         Promise.all(values.map((reponse) => reponse.json())).then((allData) => {
           setAllEvents(
@@ -82,11 +82,123 @@ function UsersGooleCalendars() {
                 return element !== undefined;
               })
               .filter((value, index, self) => index === self.findIndex((t) => t?.id === value?.id)) // renove the same event that might be in more than one cal
+              .map((evt) => {
+                setEventDateAndTime(evt);
+                if ( evt.attendees ) Promise.all(
+                  evt.attendees.map((attendee) =>
+                    fetch(getContactSearchByEmailURL(attendee.email), {
+                      headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${getOAuthToken()}`,
+                      },
+                    })
+                  )
+                ).then((values) => {
+                  Promise.all(values.map((reponse) => reponse.json())).then((allData) => {
+                    const eventAttendees = allData
+                      .map((oneData) => {
+                        return (oneData as ContactsSearchResponse).results;
+                      })
+                      .flat(1)
+                      .filter(function (element) {
+                        return element !== undefined;
+                      });
+
+                    evt.attendees?.forEach((attendee) => {
+                      const person = eventAttendees.find((eventAttendee) => {
+                        return eventAttendee.person.emailAddresses.find((emailAddress) => {
+                          return emailAddress.value === attendee.email;
+                        });
+                      });
+                      if (person) {
+                        attendee.name = person.person.names[0].displayName;
+                      }
+                    });
+                  });
+                });
+                return evt;
+              })
+              .sort((a, b) => {
+                if (a.start && b.start) {
+                  return (
+                    getDateFromISOString(a.start.dateTime || a.start.date).getTime() -
+                    getDateFromISOString(b.start.dateTime || b.start.date).getTime()
+                  );
+                }
+                return 0;
+              })
           );
+          
         });
       });
+    }
   }, [cals]);
 
+  function setEventDateAndTime(event: CalendarListEntry) {
+    if (event.start) {
+      event.start.dateStr = getDateAsTanaString(getDateFromISOString(event.start.dateTime || event.start.date));
+      event.start.timeStr = getTimeAs24Hr(getDateFromISOString(event.start.dateTime || event.start.date));
+    }
+    if (event.end) {
+      event.end.dateStr = getDateAsTanaString(getDateFromISOString(event.end.dateTime || event.end.date));
+      event.end.timeStr = getTimeAs24Hr(getDateFromISOString(event.end.dateTime || event.end.date));
+    }
+
+    if (event.conferenceData && event.conferenceData.entryPoints && event.conferenceData.entryPoints.length > 0) {
+      event.link = event.conferenceData.entryPoints[0].uri;
+    }
+  }
+
+  function generateSingleEventTemplate(event: CalendarListEntry): string {
+    const result = Mustache.render(
+      `- {{summary}} #calendar-event
+  - summary:: {{{summary}}}
+  - description:: {{{description}}}
+  - start_time:: {{{start.timeStr}}}
+  - end_time:: {{{end.timeStr}}}
+  - date:: [[{{start.dateStr}}]]
+{{#link}}
+  - link:: {{{link}}}
+{{/link}}
+{{#htmlLink}}
+  - originalEvent:: {{{htmlLink}}}
+{{/htmlLink}}
+{{#attendees.length}}
+  - attendees::
+{{/attendees.length}}
+{{#attendees}}
+    - [[{{{name}}}]]
+{{/attendees}}
+`,
+      event
+    );
+    return result;
+  }
+
+  function generateEventTemplate(event: CalendarListEntry) {
+    const result = `%%tana%%
+${generateSingleEventTemplate(event)}
+`;
+    Clipboard.copy(result);
+  }
+
+  function generateEventsTemplate(events: CalendarListEntry[]) {
+    const result = `%%tana%%
+${events.map((event) => generateSingleEventTemplate(event)).join("\n")}
+`;
+    Clipboard.copy(result);
+  }
+
+  async function actOnEvent(event: CalendarListEntry) {
+    generateEventTemplate(event);
+    await closeMainWindow();
+  }
+  
+  async function actOnAllEvent(events: CalendarListEntry[]) {
+    generateEventsTemplate(events);
+    await closeMainWindow();
+  }
+  
   function getSetCalsAction() {
     return (
       <Action.Push
@@ -122,108 +234,60 @@ function UsersGooleCalendars() {
       />
     );
   }
-  function actOnEvent(event: CalendarListEntry) {
-    if (event.start) event.start.date = formatDate(event.start.dateTime);
-    if (event.end) event.end.date = formatDate(event.end.dateTime);
-    if (event.attendees)
-      Promise.all(
-        event.attendees.map((attendee) =>
-          fetch(getContactSearchByEmailURL(attendee.email), {
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${getOAuthToken()}`,
-            },
-          })
-        )
-      ).then((values) => {
-        Promise.all(values.map((reponse) => reponse.json())).then((allData) => {
-          console.log("allData");
-          console.log(JSON.stringify(allData));
-
-          const eventAttendees = allData
-            .map((oneData) => {
-              return (oneData as ContactsSearchResponse).results;
-            })
-            .flat(1)
-            .filter(function (element) {
-              return element !== undefined;
-            });
-
-          console.log("eventAttendees");
-          console.log(JSON.stringify(eventAttendees));
-
-          event.attendees?.forEach((attendee) => {
-            const person = eventAttendees.find((eventAttendee) => {
-              return eventAttendee.person.emailAddresses.find((emailAddress) => {
-                return emailAddress.value === attendee.email;
-              });
-            });
-            if (person) {
-              attendee.name = person.person.names[0].displayName;
-            }
-          });
-          console.dir(JSON.stringify(event));
-          const result = Mustache.render(
-            `%%tana%%
-- {{summary}} #calendar-event
-  - summary:: {{summary}}
-  - id:: {{id}}
-  - date:: [[{{start.date}}]]
-  - attendees::
-{{#attendees}}
-    - {{name}} #person
-{{/attendees}}
-`,
-            event
-          );
-          Clipboard.copy(result);
-          console.log(result);
-        });
-      });
-  }
 
   return (
     <List isLoading={allEvents?.length > 0} searchBarPlaceholder="Filter by event name">
       <List.EmptyView
         title="No events"
         description="You haven't selected any calendars yet"
-        actions={
-          <ActionPanel>
-            {getSetCalsAction()}
-          </ActionPanel>
-        }
+        actions={<ActionPanel>{getSetCalsAction()}</ActionPanel>}
       />
 
       {allEvents && allEvents.length > 0 ? (
-        <List.Section title="Recent Events" subtitle={`${allEvents.length}`}>
-          {allEvents?.map((entry: CalendarListEntry) => (
-            <List.Item
-              title={entry ? entry.summary : ""}
-              key={entry?.id}
-              icon="☑️"
-              actions={
-                <ActionPanel title={entry ? entry.summary : ""}>
-                  <ActionPanel.Section>
-                    <Action
-                      title="Generate Event for Tana"
-                      icon={Icon.Star}
-                      shortcut={{ modifiers: ["cmd", "shift"], key: "f" }}
-                      onAction={() => {
-                        actOnEvent(entry);
-                      }}
-                    />
-                    <Action
-                      title="Logout"
-                      onAction={() => {
-                        revokeTokens(getOAuthToken());
-                      }}
-                    />
-                  </ActionPanel.Section>
-                  {getSetCalsAction()}
-                </ActionPanel>
-              }
-            />
-          ))}
+        <List.Section
+          title="Recent Events"
+          subtitle={`${allEvents.length} start: ${startOfDay(new Date()).toISOString()} end: ${endOfDay(
+            new Date()
+          ).toISOString()}`}
+        >
+          {allEvents?.map((entry: CalendarListEntry) => {
+            return (
+              <List.Item
+                title={entry ? `${entry.start?.timeStr} - ${entry.end?.timeStr} : ${entry.summary}` : ""}
+                key={entry?.id}
+                icon="📅"
+                actions={
+                  <ActionPanel title={entry ? entry.summary : ""}>
+                    <ActionPanel.Section>
+                      <Action
+                        title="Generate Event for Tana"
+                        icon={Icon.Star}
+                        shortcut={{ modifiers: ["cmd", "shift"], key: "f" }}
+                        onAction={() => {
+                          actOnEvent(entry);
+                        }}
+                      />
+                      <Action
+                        title="Generate All Event for Tana"
+                        icon={Icon.Star}
+                        shortcut={{ modifiers: ["cmd", "shift"], key: "a" }}
+                        onAction={() => {
+                          actOnAllEvent(allEvents);
+                        }}
+                      />
+                      <Action
+                        title="Logout"
+                        onAction={() => {
+                          revokeTokens(getOAuthToken());
+                        }}
+                      />
+                    </ActionPanel.Section>
+                    {getSetCalsAction()}
+                  </ActionPanel>
+                }
+              />
+            );
+          })}
         </List.Section>
       ) : null}
     </List>

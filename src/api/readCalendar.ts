@@ -1,4 +1,5 @@
-import {formatRFC3339} from 'date-fns'
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import {format, formatRFC3339} from 'date-fns'
 
 export type CalendarListEntry = {
   id: string;
@@ -6,15 +7,11 @@ export type CalendarListEntry = {
   summary: string;
   timeZone: string;
   attendees?: AttendeeEntry[];
-  start?: { dateTime: string; timeZone: string; date?: string };
-  end?: { dateTime: string; timeZone: string; date?: string };
-};
-
-export type CalendarEventEntry = {
-  id: string;
-  description: string;
-  summary: string;
-  timeZone: string;
+  start?: { dateTime: string; timeZone: string; date?: string; dateStr?: string; timeStr?: string };
+  end?: { dateTime: string; timeZone: string; date?: string; dateStr?: string; timeStr?: string };
+  conferenceData?: any;
+  link?: any;
+  htmlLink?: any;
 };
 
 export type AttendeeEntry = {
@@ -24,7 +21,7 @@ export type AttendeeEntry = {
 };
 
 export type CalendarEventListResponse = {
-  items: CalendarEventEntry[];
+  items: CalendarListEntry[];
 };
 
 function getParams(minTime: Date, maxTime: Date) {
@@ -34,6 +31,7 @@ function getParams(minTime: Date, maxTime: Date) {
   params.append("orderBy", "startTime");
   params.append("timeMin", formatRFC3339(minTime));
   params.append("timeMax", formatRFC3339(maxTime));
+  params.append("timeZone", format(minTime, "xxx")); // this is needed to filter events in API correctly by local TZ
   
   return params.toString();
 }
