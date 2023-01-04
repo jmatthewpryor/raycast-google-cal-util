@@ -167,7 +167,7 @@ function UsersGooleCalendars() {
   - attendees::
 {{/attendees.length}}
 {{#attendees}}
-    - [[{{{name}}}]]
+    - [[{{{name}}} #person]]
 {{/attendees}}
 `,
       event
