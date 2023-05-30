@@ -64,7 +64,7 @@ function UsersGooleCalendars() {
     LocalStorage.getItem<string>(MEETING_TAG_KEY).then((item) => {
       setMeetingTag(item);
     });
-  }, [allUserCals]);
+  });
 
   async function saveMeetingTag(tag: string): Promise<void> {
     await LocalStorage.setItem(MEETING_TAG_KEY, tag);
@@ -290,6 +290,7 @@ ${events.map((event) => generateSingleEventTemplate(event)).join("\n")}
               title="Meeting Tag"
               placeholder="Enter your meeting tag including #"
               key="tagField"
+              defaultValue={meetingTag}
             />
           </Form>
         }
