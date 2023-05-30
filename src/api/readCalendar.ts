@@ -12,6 +12,7 @@ export type CalendarListEntry = {
   conferenceData?: any;
   link?: any;
   htmlLink?: any;
+  location?: any;
 };
 
 export type AttendeeEntry = {

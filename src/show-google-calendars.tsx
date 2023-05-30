@@ -28,6 +28,7 @@ import { revokeTokens } from "./api/oauth";
 import { getDateAsTanaString, getDateFromISOString, getTimeAs24Hr } from "./helpers/date";
 
 const CALS_KEY = "TanaGCalHelper.selectedCals";
+const MEETING_TAG_KEY = "TanaGCalHelper.meetingTag";
 
 function UsersGooleCalendars() {
   const { pop } = useNavigation();
@@ -56,6 +57,18 @@ function UsersGooleCalendars() {
   async function saveCals(cals: string[]): Promise<void> {
     await LocalStorage.setItem(CALS_KEY, cals.join(","));
     setCals(cals);
+  }
+
+  const [meetingTag, setMeetingTag] = useState<string | undefined>("#calendar-event");
+  useEffect(() => {
+    LocalStorage.getItem<string>(MEETING_TAG_KEY).then((item) => {
+      setMeetingTag(item);
+    });
+  }, [allUserCals]);
+
+  async function saveMeetingTag(tag: string): Promise<void> {
+    await LocalStorage.setItem(MEETING_TAG_KEY, tag);
+    setMeetingTag(tag);
   }
 
   const [allEvents, setAllEvents] = useState<CalendarListEntry[]>([]);
@@ -147,21 +160,40 @@ function UsersGooleCalendars() {
     if (event.conferenceData && event.conferenceData.entryPoints && event.conferenceData.entryPoints.length > 0) {
       event.link = event.conferenceData.entryPoints[0].uri;
     }
+
+    if (event.description) {
+      // process descriptions that have embedded Zoom links in them
+      const zoomUrlRegex = /https:\/\/([a-zA-Z0-9]+\.)?zoom\.us\/j\/\d+(\?[^\s]+)?/;
+      const zoomUrl = event.description.match(zoomUrlRegex);
+      
+      // Tana paste can handle single newlines
+      event.description = event.description
+        .replace(/\n+/g, "\n")
+        .replace(/\n_+\n/g, "\n")
+        .trim();
+
+      if (zoomUrl && !event.link) {
+        event.link = zoomUrl[0];
+      }
+    }
   }
 
   function generateSingleEventTemplate(event: CalendarListEntry): string {
     const result = Mustache.render(
-      `- {{summary}} #calendar-event
+      `- {{summary}} ${meetingTag} {{#attendees.length}}#meeting{{/attendees.length}}
   - summary:: {{{summary}}}
   - description:: {{{description}}}
   - start_time:: {{{start.timeStr}}}
   - end_time:: {{{end.timeStr}}}
   - date:: [[{{start.dateStr}}]]
 {{#link}}
-  - link:: {{{link}}}
+  - link:: [zoom]({{{link}}})
 {{/link}}
+{{#location}}
+  - location:: {{{location}}}
+{{/location}}
 {{#htmlLink}}
-  - originalEvent:: {{{htmlLink}}}
+  - original_event:: [google]({{{htmlLink}}})
 {{/htmlLink}}
 {{#attendees.length}}
   - attendees::
@@ -235,12 +267,41 @@ ${events.map((event) => generateSingleEventTemplate(event)).join("\n")}
     );
   }
 
+  function getMeetingTagAction() {
+    return (
+      <Action.Push
+        title="Set Meeting Tag"
+        target={
+          <Form
+            actions={
+              <ActionPanel>
+                <Action.SubmitForm
+                  title="Select Calendars"
+                  onSubmit={(values) => {
+                    saveMeetingTag(values.tagField);
+                    pop();
+                  }}
+                />
+              </ActionPanel>
+            }
+          >
+            <Form.TextField
+              id="tagField"
+              title="Meeting Tag"
+              placeholder="Enter your meeting tag including #"
+              key="tagField"
+            />
+          </Form>
+        }
+      />
+    );
+  }
   return (
     <List isLoading={allEvents?.length > 0} searchBarPlaceholder="Filter by event name">
       <List.EmptyView
         title="No events"
         description="You haven't selected any calendars yet"
-        actions={<ActionPanel>{getSetCalsAction()}</ActionPanel>}
+        actions={<ActionPanel>{getMeetingTagAction()}</ActionPanel>}
       />
 
       {allEvents && allEvents.length > 0 ? (
@@ -283,6 +344,7 @@ ${events.map((event) => generateSingleEventTemplate(event)).join("\n")}
                       />
                     </ActionPanel.Section>
                     {getSetCalsAction()}
+                    {getMeetingTagAction()}
                   </ActionPanel>
                 }
               />
